@@ -10,6 +10,8 @@ import { TokensService } from './tokens.service';
 import { SessionTokenService } from './session-token.service';
 import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
+import { SecurityAuditService } from '../security-audit/security-audit.service';
+import { SecurityAuditEvent } from '../security-audit/security-audit-event.enum';
 import { User } from '../users/entities/user.entity';
 import { AuthSession } from './entities/auth-session.entity';
 import {
@@ -43,6 +45,7 @@ export class AuthService {
     private readonly sessionTokenService: SessionTokenService,
     private readonly hashService: HashService,
     private readonly errorsService: ErrorsService,
+    private readonly securityAuditService: SecurityAuditService,
   ) {}
 
   removeSensitiveInfo<T extends object, K extends keyof T>(
@@ -262,7 +265,11 @@ export class AuthService {
       }));
   }
 
-  async refreshJwtTokens(userId: number, currentRefreshToken: string | null) {
+  async refreshJwtTokens(
+    userId: number,
+    currentRefreshToken: string | null,
+    context: SessionContext = {},
+  ) {
     if (!currentRefreshToken) {
       this.errorsService.tokenNotDefined(TokenType.REFRESH);
     }
@@ -309,6 +316,14 @@ export class AuthService {
           { revoked_at: new Date(), revoked_reason: 'refresh_reuse' },
         );
         await qr.commitTransaction();
+        await this.securityAuditService.record({
+          eventType: SecurityAuditEvent.REFRESH_REUSE_DETECTED,
+          actorUserId: userId,
+          targetUserId: userId,
+          sessionId,
+          ipAddress: context.ipAddress ?? null,
+          userAgent: context.userAgent ?? null,
+        });
         this.errorsService.invalidToken(null, TokenType.REFRESH);
       }
 

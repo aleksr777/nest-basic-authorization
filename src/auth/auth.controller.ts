@@ -26,6 +26,8 @@ import { RefreshOriginGuard } from './guards/refresh-origin.guard';
 import { RefreshTokenGuard } from './guards/refresh-token.guard';
 import { User } from '../users/entities/user.entity';
 import { SecurityConfigService } from '../common/security/security-config.service';
+import { SecurityAuditService } from '../security-audit/security-audit.service';
+import { SecurityAuditEvent } from '../security-audit/security-audit-event.enum';
 import { JwtTokens, AuthResponse } from '../common/types/jwt-tokens.type';
 
 type RequestWithSafeCookies = Omit<Request, 'cookies'> & {
@@ -40,6 +42,7 @@ export class AuthController {
     private readonly passwordResetService: PasswordResetService,
     private readonly publicVerificationRateLimitService: PublicVerificationRateLimitService,
     private readonly securityConfig: SecurityConfigService,
+    private readonly securityAuditService: SecurityAuditService,
   ) {}
 
   private getRefreshCookieOptions(maxAge?: number): CookieOptions {
@@ -134,8 +137,16 @@ export class AuthController {
   @Post('login')
   async login(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const user = req.user as User;
+    const context = this.getSessionContext(req);
 
     if (user.is_blocked) {
+      await this.securityAuditService.record({
+        eventType: SecurityAuditEvent.LOGIN_BLOCKED,
+        actorUserId: +user.id,
+        targetUserId: +user.id,
+        ipAddress: context.ipAddress,
+        userAgent: context.userAgent,
+      });
       this.clearRefreshCookie(res);
       return {
         blocked: true,
@@ -144,10 +155,18 @@ export class AuthController {
       };
     }
 
-    const tokens = await this.authService.loginNewSession(
-      user.id,
-      this.getSessionContext(req),
+    const tokens = await this.authService.loginNewSession(user.id, context);
+    const sessionId = this.authService.getSessionIdFromToken(
+      tokens?.access_token,
     );
+    await this.securityAuditService.record({
+      eventType: SecurityAuditEvent.LOGIN_SUCCESS,
+      actorUserId: +user.id,
+      targetUserId: +user.id,
+      sessionId,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
 
     return this.handleAuthResult(res, tokens);
   }
@@ -157,8 +176,18 @@ export class AuthController {
   async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
     const user = req.user as User;
     const accessToken = req.headers.authorization;
+    const sessionId = this.authService.getSessionIdFromToken(accessToken);
+    const context = this.getSessionContext(req);
 
     await this.authService.logout(+user.id, accessToken);
+    await this.securityAuditService.record({
+      eventType: SecurityAuditEvent.LOGOUT,
+      actorUserId: +user.id,
+      targetUserId: +user.id,
+      sessionId,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
 
     this.clearRefreshCookie(res);
 
@@ -174,7 +203,19 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const user = req.user as User;
+    const sessionId = this.authService.getSessionIdFromToken(
+      req.headers.authorization,
+    );
+    const context = this.getSessionContext(req);
     await this.authService.logoutAll(+user.id, req.headers.authorization);
+    await this.securityAuditService.record({
+      eventType: SecurityAuditEvent.LOGOUT_ALL,
+      actorUserId: +user.id,
+      targetUserId: +user.id,
+      sessionId,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
     this.clearRefreshCookie(res);
     return { message: 'Logged out from all sessions successfully.' };
   }
@@ -202,7 +243,17 @@ export class AuthController {
     const currentSessionId = this.authService.getSessionIdFromToken(
       req.headers.authorization,
     );
+    const context = this.getSessionContext(req);
     await this.authService.revokeSession(+user.id, sessionId, 'user_revoked');
+    await this.securityAuditService.record({
+      eventType: SecurityAuditEvent.SESSION_REVOKED,
+      actorUserId: +user.id,
+      targetUserId: +user.id,
+      sessionId,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+      metadata: { current_session: currentSessionId === sessionId },
+    });
     if (currentSessionId === sessionId) {
       this.clearRefreshCookie(res);
     }
@@ -219,6 +270,7 @@ export class AuthController {
     const tokens = await this.authService.refreshJwtTokens(
       +user.id,
       this.getRefreshToken(req),
+      this.getSessionContext(req),
     );
 
     return this.handleAuthResult(res, tokens);

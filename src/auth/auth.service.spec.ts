@@ -5,6 +5,8 @@ import { SessionTokenService } from './session-token.service';
 import { TokensService } from './tokens.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { HashService } from '../common/hash-service/hash.service';
+import { SecurityAuditService } from '../security-audit/security-audit.service';
+import { SecurityAuditEvent } from '../security-audit/security-audit-event.enum';
 import { JwtTokens } from '../common/types/jwt-tokens.type';
 import { User } from '../users/entities/user.entity';
 import { AuthSession } from './entities/auth-session.entity';
@@ -73,6 +75,10 @@ describe('AuthService persistent sessions', () => {
       generate: jest.fn(() => createTokens(nextToken)),
       getSessionId: jest.fn(() => SESSION_ID),
     } as unknown as SessionTokenService;
+    const auditRecord = jest.fn().mockResolvedValue(undefined);
+    const securityAuditService = {
+      record: auditRecord,
+    } as unknown as SecurityAuditService;
 
     const service = new AuthService(
       usersRepository,
@@ -82,9 +88,10 @@ describe('AuthService persistent sessions', () => {
       sessionTokenService,
       hashService,
       errorsService,
+      securityAuditService,
     );
 
-    return { service, queryRunner };
+    return { service, queryRunner, auditRecord };
   };
 
   it('rotates a valid refresh token inside the same session', async () => {
@@ -109,14 +116,17 @@ describe('AuthService persistent sessions', () => {
     expect(queryRunner.rollbackTransaction).not.toHaveBeenCalled();
   });
 
-  it('revokes only the affected session when an old refresh token is replayed', async () => {
-    const { service, queryRunner } = createService(
+  it('revokes only the affected session and audits refresh-token replay', async () => {
+    const { service, queryRunner, auditRecord } = createService(
       hashService.hashToken('new-current-token'),
       'unused-next-token',
     );
 
     await expect(
-      service.refreshJwtTokens(7, 'old-replayed-token'),
+      service.refreshJwtTokens(7, 'old-replayed-token', {
+        ipAddress: '127.0.0.1',
+        userAgent: 'test-agent',
+      }),
     ).rejects.toBeInstanceOf(UnauthorizedException);
 
     expect(queryRunner.manager.update).toHaveBeenCalledWith(
@@ -127,5 +137,13 @@ describe('AuthService persistent sessions', () => {
       }),
     );
     expect(queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
+    expect(auditRecord).toHaveBeenCalledWith({
+      eventType: SecurityAuditEvent.REFRESH_REUSE_DETECTED,
+      actorUserId: 7,
+      targetUserId: 7,
+      sessionId: SESSION_ID,
+      ipAddress: '127.0.0.1',
+      userAgent: 'test-agent',
+    });
   });
 });

@@ -11,12 +11,15 @@ import {
 } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthService } from '../auth/auth.service';
 import {
   clearRefreshCookie,
   getAuthResponse,
   setRefreshCookie,
 } from '../auth/auth-response.util';
 import { SecurityConfigService } from '../common/security/security-config.service';
+import { SecurityAuditService } from '../security-audit/security-audit.service';
+import { SecurityAuditEvent } from '../security-audit/security-audit-event.enum';
 import { UsersService } from './users.service';
 import { EmailChangeService } from './email-change.service';
 import { PasswordChangeService } from './password-change.service';
@@ -35,8 +38,17 @@ export class UsersController {
     private readonly usersService: UsersService,
     private readonly emailChangeService: EmailChangeService,
     private readonly passwordChangeService: PasswordChangeService,
+    private readonly authService: AuthService,
     private readonly securityConfig: SecurityConfigService,
+    private readonly securityAuditService: SecurityAuditService,
   ) {}
+
+  private getAuditContext(req: Request) {
+    return {
+      ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+      userAgent: req.get('user-agent') ?? null,
+    };
+  }
 
   @Get('me')
   async getCurrentProfile(@Req() req: Request) {
@@ -93,6 +105,15 @@ export class UsersController {
       req.headers.authorization,
     );
     if (!tokens) return tokens;
+    const context = this.getAuditContext(req);
+    await this.securityAuditService.record({
+      eventType: SecurityAuditEvent.EMAIL_CHANGED,
+      actorUserId: +user.id,
+      targetUserId: +user.id,
+      sessionId: this.authService.getSessionIdFromToken(tokens.access_token),
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
     setRefreshCookie(res, tokens, this.securityConfig);
     return getAuthResponse(tokens);
   }
@@ -117,6 +138,15 @@ export class UsersController {
       req.headers.authorization,
     );
     if (!tokens) return tokens;
+    const context = this.getAuditContext(req);
+    await this.securityAuditService.record({
+      eventType: SecurityAuditEvent.PASSWORD_CHANGED,
+      actorUserId: +user.id,
+      targetUserId: +user.id,
+      sessionId: this.authService.getSessionIdFromToken(tokens.access_token),
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
     setRefreshCookie(res, tokens, this.securityConfig);
     return getAuthResponse(tokens);
   }
@@ -141,6 +171,15 @@ export class UsersController {
       req.headers.authorization,
     );
     if (!tokens) return tokens;
+    const context = this.getAuditContext(req);
+    await this.securityAuditService.record({
+      eventType: SecurityAuditEvent.PASSWORD_RESET,
+      actorUserId: +user.id,
+      targetUserId: +user.id,
+      sessionId: this.authService.getSessionIdFromToken(tokens.access_token),
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
     setRefreshCookie(res, tokens, this.securityConfig);
     return getAuthResponse(tokens);
   }

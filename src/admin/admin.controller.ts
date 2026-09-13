@@ -12,9 +12,12 @@ import {
   ParseIntPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { AuthService } from '../auth/auth.service';
 import { RolesGuard } from '../common/guards/roles.guard';
 import { Roles } from '../common/decorators/roles.decorator';
 import { Role } from '../common/types/role.enum';
+import { SecurityAuditService } from '../security-audit/security-audit.service';
+import { SecurityAuditEvent } from '../security-audit/security-audit-event.enum';
 import { GetUsersQueryDto } from './dto/get-users-query.dto';
 import { BlockUserDto } from './dto/block-user.dto';
 import { AdminPasswordDto } from './dto/admin-password.dto';
@@ -31,7 +34,19 @@ export class AdminController {
   constructor(
     private readonly adminService: AdminService,
     private readonly transfer: AdminTransferService,
+    private readonly authService: AuthService,
+    private readonly securityAuditService: SecurityAuditService,
   ) {}
+
+  private getAuditContext(req: Request) {
+    return {
+      sessionId: this.authService.getSessionIdFromToken(
+        req.headers.authorization,
+      ),
+      ipAddress: req.ip || req.socket.remoteAddress || 'unknown',
+      userAgent: req.get('user-agent') ?? null,
+    };
+  }
 
   @Get('transfer/status')
   getTransferStatus() {
@@ -96,11 +111,33 @@ export class AdminController {
       blocked_reason,
       dto.password,
     );
+    const context = this.getAuditContext(req);
+    await this.securityAuditService.record({
+      eventType: SecurityAuditEvent.ACCOUNT_BLOCKED,
+      actorUserId: adminId,
+      targetUserId: userId,
+      sessionId: context.sessionId,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
   }
 
   @Patch('users/unblock/:id')
-  async unblockUser(@Param('id', ParseIntPipe) id: number) {
+  async unblockUser(
+    @Req() req: Request,
+    @Param('id', ParseIntPipe) id: number,
+  ) {
+    const admin = req.user as User;
     const userId = +id;
     await this.adminService.unblockUserById(userId);
+    const context = this.getAuditContext(req);
+    await this.securityAuditService.record({
+      eventType: SecurityAuditEvent.ACCOUNT_UNBLOCKED,
+      actorUserId: +admin.id,
+      targetUserId: userId,
+      sessionId: context.sessionId,
+      ipAddress: context.ipAddress,
+      userAgent: context.userAgent,
+    });
   }
 }

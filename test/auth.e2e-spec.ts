@@ -15,6 +15,7 @@ import { EnvService } from '../src/common/env-service/env.service';
 import { ErrorsService } from '../src/common/errors-service/errors.service';
 import { SecurityConfigService } from '../src/common/security/security-config.service';
 import { configureHttpSecurity } from '../src/common/security/security-http';
+import { SecurityAuditService } from '../src/security-audit/security-audit.service';
 
 const refreshTokens = {
   access_token: 'new-access-token',
@@ -30,6 +31,12 @@ type AuthResponseBody = {
   access_token_expires: number;
   refresh_token?: unknown;
 };
+
+type RefreshCall = [
+  userId: number,
+  refreshToken: string,
+  context: { ipAddress: string; userAgent: string | null },
+];
 
 describe('AuthController (e2e)', () => {
   let app: NestExpressApplication;
@@ -65,6 +72,9 @@ describe('AuthController (e2e)', () => {
   const publicVerificationRateLimitService = {
     consume: jest.fn(),
   };
+  const securityAuditService = {
+    record: jest.fn().mockResolvedValue(undefined),
+  };
 
   const getServer = (): Server => app.getHttpServer();
 
@@ -86,6 +96,7 @@ describe('AuthController (e2e)', () => {
         { provide: AuthService, useValue: authService },
         { provide: RegistrationService, useValue: registrationService },
         { provide: PasswordResetService, useValue: passwordResetService },
+        { provide: SecurityAuditService, useValue: securityAuditService },
         {
           provide: PublicVerificationRateLimitService,
           useValue: publicVerificationRateLimitService,
@@ -184,11 +195,17 @@ describe('AuthController (e2e)', () => {
 
     const body = response.body as AuthResponseBody;
     const setCookie = response.headers['set-cookie']?.[0];
+    const refreshCalls = authService.refreshJwtTokens.mock.calls as RefreshCall[];
+    const refreshCall = refreshCalls[0];
 
-    expect(authService.refreshJwtTokens).toHaveBeenCalledWith(
-      7,
-      'old-refresh-token',
-    );
+    expect(authService.refreshJwtTokens).toHaveBeenCalledTimes(1);
+    expect(refreshCall[0]).toBe(7);
+    expect(refreshCall[1]).toBe('old-refresh-token');
+    expect(typeof refreshCall[2].ipAddress).toBe('string');
+    expect(
+      refreshCall[2].userAgent === null ||
+        typeof refreshCall[2].userAgent === 'string',
+    ).toBe(true);
     expect(body).toEqual({
       access_token: 'new-access-token',
       access_token_expires: 1_900_000_000,
