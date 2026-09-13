@@ -5,8 +5,9 @@ import { SecurityAuditService } from './security-audit.service';
 
 describe('SecurityAuditService', () => {
   it('drops secret-like metadata keys before persistence', async () => {
+    const insertMock = jest.fn().mockResolvedValue({ identifiers: [] });
     const repository = {
-      insert: jest.fn().mockResolvedValue({ identifiers: [] }),
+      insert: insertMock,
     } as unknown as Repository<SecurityAuditLog>;
     const service = new SecurityAuditService(repository);
 
@@ -21,7 +22,7 @@ describe('SecurityAuditService', () => {
       },
     });
 
-    expect(repository.insert).toHaveBeenCalledWith(
+    expect(insertMock).toHaveBeenCalledWith(
       expect.objectContaining({
         event_type: SecurityAuditEvent.LOGIN_FAILED,
         ip_address: '127.0.0.1',
