@@ -101,18 +101,6 @@ export class User {
   })
   password!: string;
 
-  /* refresh_token */
-  @IsString()
-  @Max(512)
-  @Column({
-    type: 'varchar',
-    name: 'refresh_token',
-    length: 512,
-    nullable: true,
-    select: false,
-  })
-  refresh_token?: string | null;
-
   /* role */
   @IsNotEmpty()
   @IsString()
