@@ -8,7 +8,6 @@ export const AGE = 'age';
 
 export const ROLE = 'role';
 export const PASSWORD = 'password';
-export const REFRESH_TOKEN = 'refresh_token';
 
 export const LAST_ACTIVITY_AT = 'last_activity_at';
 export const CREATED_AT = 'created_at';
@@ -49,7 +48,7 @@ export const USER_CONFIDENTIAL_FIELDS = [
   ROLE,
 ] as const;
 
-export const USER_SECRET_FIELDS = [PASSWORD, REFRESH_TOKEN] as const;
+export const USER_SECRET_FIELDS = [PASSWORD] as const;
 
 export const USER_PROFILE_FIELDS = [
   ...USER_PUBLIC_FIELDS,

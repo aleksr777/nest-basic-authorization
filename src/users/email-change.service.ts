@@ -255,7 +255,6 @@ export class EmailChangeService {
       await this.redisService
         .del(this.getLockoutKey(currentUserId))
         .catch(() => undefined);
-      await this.tokensService.removeRefreshToken(user.id);
       await this.tokensService.addJwtTokenToBlacklist(
         accessToken,
         TokenType.ACCESS,
