@@ -195,7 +195,9 @@ describe('AuthController (e2e)', () => {
 
     const body = response.body as AuthResponseBody;
     const setCookie = response.headers['set-cookie']?.[0];
-    const refreshCall = authService.refreshJwtTokens.mock.calls[0] as RefreshCall;
+    const refreshCall = authService.refreshJwtTokens.mock.calls[
+      0
+    ] as RefreshCall;
 
     expect(authService.refreshJwtTokens).toHaveBeenCalledTimes(1);
     expect(refreshCall[0]).toBe(7);
