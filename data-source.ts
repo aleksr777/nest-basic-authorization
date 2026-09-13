@@ -4,6 +4,7 @@ dotenv.config();
 import { DataSource } from 'typeorm';
 import { User } from './src/users/entities/user.entity';
 import { AuthSession } from './src/auth/entities/auth-session.entity';
+import { SecurityAuditLog } from './src/security-audit/security-audit-log.entity';
 
 const dataSource = new DataSource({
   type: 'postgres',
@@ -12,7 +13,7 @@ const dataSource = new DataSource({
   database: process.env.DB_NAME,
   username: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
-  entities: [User, AuthSession],
+  entities: [User, AuthSession, SecurityAuditLog],
   migrations: ['src/migrations/*.ts'],
   synchronize: false,
 });
