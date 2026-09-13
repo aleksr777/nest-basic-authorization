@@ -75,8 +75,9 @@ describe('AuthService persistent sessions', () => {
       generate: jest.fn(() => createTokens(nextToken)),
       getSessionId: jest.fn(() => SESSION_ID),
     } as unknown as SessionTokenService;
+    const auditRecord = jest.fn().mockResolvedValue(undefined);
     const securityAuditService = {
-      record: jest.fn().mockResolvedValue(undefined),
+      record: auditRecord,
     } as unknown as SecurityAuditService;
 
     const service = new AuthService(
@@ -90,7 +91,7 @@ describe('AuthService persistent sessions', () => {
       securityAuditService,
     );
 
-    return { service, queryRunner, securityAuditService };
+    return { service, queryRunner, auditRecord };
   };
 
   it('rotates a valid refresh token inside the same session', async () => {
@@ -116,7 +117,7 @@ describe('AuthService persistent sessions', () => {
   });
 
   it('revokes only the affected session and audits refresh-token replay', async () => {
-    const { service, queryRunner, securityAuditService } = createService(
+    const { service, queryRunner, auditRecord } = createService(
       hashService.hashToken('new-current-token'),
       'unused-next-token',
     );
@@ -136,7 +137,7 @@ describe('AuthService persistent sessions', () => {
       }),
     );
     expect(queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
-    expect(securityAuditService.record).toHaveBeenCalledWith({
+    expect(auditRecord).toHaveBeenCalledWith({
       eventType: SecurityAuditEvent.REFRESH_REUSE_DETECTED,
       actorUserId: 7,
       targetUserId: 7,
