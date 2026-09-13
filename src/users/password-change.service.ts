@@ -171,11 +171,7 @@ export class PasswordChangeService {
       const same = await this.hashService.compare(newPassword, user.password);
       if (same) this.errorsService.badRequest(ErrMsg.NEW_PASSWORD_MUST_DIFFER);
       const hash = await this.hashService.hash(newPassword);
-      await qr.manager.update(
-        User,
-        { id: userId },
-        { password: hash, refresh_token: null },
-      );
+      await qr.manager.update(User, { id: userId }, { password: hash });
       await qr.commitTransaction();
       await this.tokensService.addJwtTokenToBlacklist(
         accessToken,
