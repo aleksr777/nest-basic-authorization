@@ -32,6 +32,12 @@ type AuthResponseBody = {
   refresh_token?: unknown;
 };
 
+type RefreshCall = [
+  userId: number,
+  refreshToken: string,
+  context: { ipAddress: string; userAgent: string | null },
+];
+
 describe('AuthController (e2e)', () => {
   let app: NestExpressApplication;
 
@@ -189,15 +195,16 @@ describe('AuthController (e2e)', () => {
 
     const body = response.body as AuthResponseBody;
     const setCookie = response.headers['set-cookie']?.[0];
+    const refreshCall = authService.refreshJwtTokens.mock.calls[0] as RefreshCall;
 
-    expect(authService.refreshJwtTokens).toHaveBeenCalledWith(
-      7,
-      'old-refresh-token',
-      expect.objectContaining({
-        ipAddress: expect.any(String),
-        userAgent: expect.anything(),
-      }),
-    );
+    expect(authService.refreshJwtTokens).toHaveBeenCalledTimes(1);
+    expect(refreshCall[0]).toBe(7);
+    expect(refreshCall[1]).toBe('old-refresh-token');
+    expect(typeof refreshCall[2].ipAddress).toBe('string');
+    expect(
+      refreshCall[2].userAgent === null ||
+        typeof refreshCall[2].userAgent === 'string',
+    ).toBe(true);
     expect(body).toEqual({
       access_token: 'new-access-token',
       access_token_expires: 1_900_000_000,
