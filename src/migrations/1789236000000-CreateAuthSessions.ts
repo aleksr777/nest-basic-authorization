@@ -3,7 +3,7 @@ import { MigrationInterface, QueryRunner } from 'typeorm';
 export class CreateAuthSessions1789236000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
     await queryRunner.query(`
-      CREATE TABLE "auth_session" (
+      CREATE TABLE IF NOT EXISTS "auth_session" (
         "id" uuid NOT NULL,
         "user_id" integer NOT NULL,
         "refresh_token_hash" varchar(64) NOT NULL,
@@ -20,20 +20,18 @@ export class CreateAuthSessions1789236000000 implements MigrationInterface {
       )
     `);
     await queryRunner.query(
-      'CREATE INDEX "IDX_auth_session_user_id" ON "auth_session" ("user_id")',
+      'CREATE INDEX IF NOT EXISTS "IDX_auth_session_user_id" ON "auth_session" ("user_id")',
     );
     await queryRunner.query(
-      'CREATE INDEX "IDX_auth_session_user_revoked" ON "auth_session" ("user_id", "revoked_at")',
+      'CREATE INDEX IF NOT EXISTS "IDX_auth_session_user_revoked" ON "auth_session" ("user_id", "revoked_at")',
     );
-
-    // Refresh JWTs issued before session IDs existed cannot be mapped safely to
-    // a session row. Invalidate their legacy hashes so deployment fails closed.
-    await queryRunner.query('UPDATE "user" SET "refresh_token" = NULL');
   }
 
   public async down(queryRunner: QueryRunner): Promise<void> {
-    await queryRunner.query('DROP INDEX "IDX_auth_session_user_revoked"');
-    await queryRunner.query('DROP INDEX "IDX_auth_session_user_id"');
-    await queryRunner.query('DROP TABLE "auth_session"');
+    await queryRunner.query(
+      'DROP INDEX IF EXISTS "IDX_auth_session_user_revoked"',
+    );
+    await queryRunner.query('DROP INDEX IF EXISTS "IDX_auth_session_user_id"');
+    await queryRunner.query('DROP TABLE IF EXISTS "auth_session"');
   }
 }
