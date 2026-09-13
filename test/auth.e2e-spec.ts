@@ -15,6 +15,7 @@ import { EnvService } from '../src/common/env-service/env.service';
 import { ErrorsService } from '../src/common/errors-service/errors.service';
 import { SecurityConfigService } from '../src/common/security/security-config.service';
 import { configureHttpSecurity } from '../src/common/security/security-http';
+import { SecurityAuditService } from '../src/security-audit/security-audit.service';
 
 const refreshTokens = {
   access_token: 'new-access-token',
@@ -65,6 +66,9 @@ describe('AuthController (e2e)', () => {
   const publicVerificationRateLimitService = {
     consume: jest.fn(),
   };
+  const securityAuditService = {
+    record: jest.fn().mockResolvedValue(undefined),
+  };
 
   const getServer = (): Server => app.getHttpServer();
 
@@ -86,6 +90,7 @@ describe('AuthController (e2e)', () => {
         { provide: AuthService, useValue: authService },
         { provide: RegistrationService, useValue: registrationService },
         { provide: PasswordResetService, useValue: passwordResetService },
+        { provide: SecurityAuditService, useValue: securityAuditService },
         {
           provide: PublicVerificationRateLimitService,
           useValue: publicVerificationRateLimitService,
@@ -188,6 +193,10 @@ describe('AuthController (e2e)', () => {
     expect(authService.refreshJwtTokens).toHaveBeenCalledWith(
       7,
       'old-refresh-token',
+      expect.objectContaining({
+        ipAddress: expect.any(String),
+        userAgent: expect.anything(),
+      }),
     );
     expect(body).toEqual({
       access_token: 'new-access-token',
