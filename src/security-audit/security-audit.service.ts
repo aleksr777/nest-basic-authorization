@@ -38,10 +38,13 @@ export class SecurityAuditService {
 
     const safeEntries = Object.entries(metadata)
       .filter(([key]) => !SENSITIVE_METADATA_KEY.test(key))
-      .map(([key, value]) => [
-        key,
-        typeof value === 'string' ? value.slice(0, 512) : value,
-      ] as const);
+      .map(
+        ([key, value]) =>
+          [
+            key,
+            typeof value === 'string' ? value.slice(0, 512) : value,
+          ] as const,
+      );
 
     return safeEntries.length > 0 ? Object.fromEntries(safeEntries) : null;
   }
@@ -60,7 +63,9 @@ export class SecurityAuditService {
     } catch {
       // Audit persistence must never expose secrets or replace the original
       // application outcome. Infrastructure monitoring should alert on this.
-      this.logger.error(`Failed to persist security audit event: ${entry.eventType}`);
+      this.logger.error(
+        `Failed to persist security audit event: ${entry.eventType}`,
+      );
     }
   }
 }
