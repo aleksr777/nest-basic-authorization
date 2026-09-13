@@ -1,13 +1,15 @@
 import { HttpException, Injectable } from '@nestjs/common';
 import { Repository } from 'typeorm';
 import { InjectRepository } from '@nestjs/typeorm';
-import { AuthService } from './auth.service';
+import { AuthService, SessionContext } from './auth.service';
 import { TokensService } from './tokens.service';
 import { HashService } from '../common/hash-service/hash.service';
 import { ErrorsService } from '../common/errors-service/errors.service';
 import { MailService } from '../common/mail-service/mail.service';
 import { EnvService } from '../common/env-service/env.service';
 import { RedisService } from '../common/redis-service/redis.service';
+import { SecurityAuditService } from '../security-audit/security-audit.service';
+import { SecurityAuditEvent } from '../security-audit/security-audit-event.enum';
 import { User } from '../users/entities/user.entity';
 import { EMAIL, ID } from '../common/constants/user-select-fields.constants';
 import { TokenType } from '../common/types/token-type.type';
@@ -34,6 +36,7 @@ export class PasswordResetService {
     private readonly mailService: MailService,
     private readonly envService: EnvService,
     private readonly redisService: RedisService,
+    private readonly securityAuditService: SecurityAuditService,
   ) {
     this.resetExpiresIn =
       this.envService.get('RESET_TOKEN_EXPIRES_IN', 'number') / 60;
@@ -168,7 +171,12 @@ export class PasswordResetService {
     }
   }
 
-  async confirm(code: string, newPassword: string, email: string) {
+  async confirm(
+    code: string,
+    newPassword: string,
+    email: string,
+    context: SessionContext = {},
+  ) {
     const attemptSubject = email.trim().toLowerCase();
     await this.assertNotLocked(attemptSubject);
     await this.tokensService.assertVerificationAttemptsAvailable(
@@ -211,7 +219,17 @@ export class PasswordResetService {
       await this.redisService
         .del(this.getLockoutKey(attemptSubject))
         .catch(() => undefined);
-      return this.authService.login(userId);
+      const tokens = await this.authService.login(userId, context);
+      await this.securityAuditService.record({
+        eventType: SecurityAuditEvent.PASSWORD_RESET,
+        actorUserId: userId,
+        targetUserId: userId,
+        sessionId: this.authService.getSessionIdFromToken(tokens?.access_token),
+        ipAddress: context.ipAddress ?? null,
+        userAgent: context.userAgent ?? null,
+        metadata: { flow: 'public_reset' },
+      });
+      return tokens;
     } catch (err: unknown) {
       this.errorsService.resetPassword(err);
     }
