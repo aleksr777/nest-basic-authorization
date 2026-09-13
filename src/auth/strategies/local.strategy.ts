@@ -4,12 +4,15 @@ import { Injectable } from '@nestjs/common';
 import { Request } from 'express';
 import { AuthService } from '../../auth/auth.service';
 import { LoginRateLimitService } from '../login-rate-limit.service';
+import { SecurityAuditService } from '../../security-audit/security-audit.service';
+import { SecurityAuditEvent } from '../../security-audit/security-audit-event.enum';
 
 @Injectable()
 export class LocalStrategy extends PassportStrategy(Strategy) {
   constructor(
     private readonly authService: AuthService,
     private readonly loginRateLimitService: LoginRateLimitService,
+    private readonly securityAuditService: SecurityAuditService,
   ) {
     super({
       usernameField: 'email',
@@ -31,6 +34,11 @@ export class LocalStrategy extends PassportStrategy(Strategy) {
       return user;
     } catch (err: unknown) {
       await this.loginRateLimitService.registerFailure(email, ip);
+      await this.securityAuditService.record({
+        eventType: SecurityAuditEvent.LOGIN_FAILED,
+        ipAddress: ip,
+        userAgent: req.get('user-agent') ?? null,
+      });
       throw err;
     }
   }
