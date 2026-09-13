@@ -1,8 +1,5 @@
 import { randomInt } from 'node:crypto';
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { User } from '../users/entities/user.entity';
 import { RedisService } from '../common/redis-service/redis.service';
 import { JwtService } from '@nestjs/jwt';
 import { EnvService } from '../common/env-service/env.service';
@@ -26,10 +23,6 @@ const ADMIN_TRANSFER_VERIFICATION_ATTEMPTS = 3;
 
 @Injectable()
 export class TokensService {
-  private readonly accessSecret: string;
-  private readonly refreshSecret: string;
-  private readonly accessExpiresIn: string;
-  private readonly refreshExpiresIn: string;
   private readonly transferExpiresIn: number;
   private readonly resetExpiresIn: number;
   private readonly registrationExpiresIn: number;
@@ -38,17 +31,11 @@ export class TokensService {
   private readonly verificationResendCooldown: number;
 
   constructor(
-    @InjectRepository(User)
-    private usersRepository: Repository<User>,
     private readonly redisService: RedisService,
     private readonly envService: EnvService,
     private readonly jwtService: JwtService,
     private readonly errorsService: ErrorsService,
   ) {
-    this.accessSecret = this.envService.get('JWT_ACCESS_SECRET');
-    this.refreshSecret = this.envService.get('JWT_REFRESH_SECRET');
-    this.accessExpiresIn = this.envService.get('JWT_ACCESS_EXPIRES_IN');
-    this.refreshExpiresIn = this.envService.get('JWT_REFRESH_EXPIRES_IN');
     this.transferExpiresIn = this.envService.get(
       'ADMIN_TRANSFER_TOKEN_EXPIRES_IN',
       'number',
@@ -248,60 +235,6 @@ export class TokensService {
       this.errorsService.jwtTokenBlacklisted();
       return 'blacklisted';
     }
-  }
-
-  async saveRefreshToken(userId: number, refresh_token: string) {
-    try {
-      const result = await this.usersRepository.update(
-        { id: userId },
-        {
-          refresh_token,
-        },
-      );
-      if (result.affected === 0) {
-        return this.errorsService.userNotFound();
-      }
-    } catch (err: unknown) {
-      this.errorsService.default(err);
-    }
-  }
-
-  async removeRefreshToken(userId: number) {
-    try {
-      const result = await this.usersRepository.update(
-        { id: userId },
-        {
-          refresh_token: null,
-        },
-      );
-      if (result.affected === 0) {
-        return this.errorsService.userNotFound();
-      }
-    } catch (err: unknown) {
-      this.errorsService.default(err);
-    }
-  }
-
-  generateJwtTokens(userId: number) {
-    const payload = {
-      sub: userId,
-    };
-    const access_token = this.jwtService.sign(payload, {
-      secret: this.accessSecret,
-      expiresIn: this.accessExpiresIn,
-    });
-    const refresh_token = this.jwtService.sign(payload, {
-      secret: this.refreshSecret,
-      expiresIn: this.refreshExpiresIn,
-    });
-    const decodedAccess = this.jwtService.decode<JwtPayload>(access_token);
-    const decodedRefresh = this.jwtService.decode<JwtPayload>(refresh_token);
-    return {
-      access_token,
-      refresh_token,
-      access_token_expires: decodedAccess?.exp ?? null,
-      refresh_token_expires: decodedRefresh?.exp ?? null,
-    };
   }
 
   generateVerificationCode(): string {
