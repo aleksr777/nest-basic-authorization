@@ -1,0 +1,15 @@
+export enum SecurityAuditEvent {
+  LOGIN_SUCCESS = 'login_success',
+  LOGIN_FAILED = 'login_failed',
+  LOGIN_BLOCKED = 'login_blocked',
+  LOGOUT = 'logout',
+  LOGOUT_ALL = 'logout_all',
+  SESSION_REVOKED = 'session_revoked',
+  REFRESH_REUSE_DETECTED = 'refresh_reuse_detected',
+  PASSWORD_CHANGED = 'password_changed',
+  PASSWORD_RESET = 'password_reset',
+  EMAIL_CHANGED = 'email_changed',
+  ACCOUNT_BLOCKED = 'account_blocked',
+  ACCOUNT_UNBLOCKED = 'account_unblocked',
+  ADMIN_RIGHTS_TRANSFERRED = 'admin_rights_transferred',
+}
